@@ -1,0 +1,54 @@
+# ============================================================
+# Python AI Services — Dependencies
+# FastAPI + PaddleOCR + Google Gemini + asyncpg
+# ============================================================
+
+# ── Web Framework ─────────────────────────────────────────────
+fastapi>=0.115.5               # keep flexible; 0.115.5+ is py3.14 compatible
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+
+# ── Settings & Validation ─────────────────────────────────────
+# pydantic>=2.12.0 is the FIRST release with prebuilt Python 3.14 wheels.
+# Older versions (<=2.11.x) require Rust/Cargo to build pydantic-core from
+# source, which fails on Render's read-only /usr/local/cargo filesystem.
+pydantic>=2.12.0
+pydantic-settings>=2.7.0
+
+# ── Database ──────────────────────────────────────────────────
+asyncpg>=0.30.0            # async PostgreSQL driver; >=0.30 has py3.14 wheels
+
+# ── Document Parsing & OCR (lightweight) ──────────────────────
+# pdfplumber: native PDF text extraction (no ML needed)
+pdfplumber==0.11.4
+# pdf2image: PDF → image for scanned docs (uses poppler-utils)
+pdf2image==1.17.0
+Pillow==11.0.0
+# python-docx: DOCX parsing
+python-docx==1.1.2
+opencv-python-headless==4.10.0.84
+# paddlepaddle is installed directly via wheel URL in the Dockerfile
+# (PyPI does not publish manylinux2014 wheels for paddlepaddle on Python 3.11)
+paddleocr==2.7.3
+
+# ── LLM ────────────────────────────────────────
+google-generativeai==0.8.3
+openai==1.59.3
+
+# ── HTTP Client (for backend callbacks) ───────────────────────
+httpx==0.28.1
+aiohttp==3.11.10
+json_repair
+
+# ── Utilities ─────────────────────────────────────────────────
+python-dotenv==1.0.1
+python-jose[cryptography]==3.3.0   # JWT for service-to-service auth
+tenacity==9.0.0            # Retry logic for LLM / OCR failures
+numpy>=2.0.0              # Vector operations
+loguru==0.7.3              # Structured logging
+reportlab==4.1.0           # PDF Generation for testing and reports
+json-repair==0.61.0        # Fix truncated/broken JSON from LLM
+
+# ── Cross-Encoder Re-ranker ───────────────────────────────────────────────────
+sentence-transformers>=3.0.0   # CrossEncoder for top-40 → top-10 re-ranking
+redis>=5.0.0
