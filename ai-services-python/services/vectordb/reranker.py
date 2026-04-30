@@ -1,6 +1,5 @@
 import asyncio
 from loguru import logger
-from sentence_transformers import CrossEncoder
 from config.settings import get_settings
 
 settings = get_settings()
@@ -26,6 +25,7 @@ class RerankerService:
                 return self.model
             try:
                 logger.info(f"Loading CrossEncoder re-ranker model: {settings.RERANKER_MODEL}")
+                from sentence_transformers import CrossEncoder  # lazy import — avoids torch load at startup
                 self.model = await asyncio.to_thread(CrossEncoder, settings.RERANKER_MODEL)
             except Exception as e:
                 logger.error(f"Failed to load CrossEncoder model: {e}")
