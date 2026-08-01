@@ -20,7 +20,7 @@ import {
   ChevronRight,
   Sparkles,
   ShieldCheck,
-  Database
+
 } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext.jsx';
@@ -162,8 +162,7 @@ export default function BankAdminDashboard() {
   
   const [policies, setPolicies] = useState([]);
   const [loadingPolicies, setLoadingPolicies] = useState(false);
-  const [ruleInventory, setRuleInventory] = useState([]);
-  const [loadingRuleInventory, setLoadingRuleInventory] = useState(false);
+
   const [underwritingAuditLogs, setUnderwritingAuditLogs] = useState([]);
   const [auditAppId, setAuditAppId] = useState('');
   const [viewingConfidentialDoc, setViewingConfidentialDoc] = useState(null);
@@ -225,18 +224,7 @@ export default function BankAdminDashboard() {
     }
   };
 
-  const fetchRuleInventory = async () => {
-    if (!user?.bank_name) return;
-    try {
-      setLoadingRuleInventory(true);
-      const { data } = await underwritingApi.getRuleInventory(user.bank_name);
-      setRuleInventory(data.data);
-    } catch (err) {
-      console.error('Failed to load rule inventory:', err);
-    } finally {
-      setLoadingRuleInventory(false);
-    }
-  };
+
 
   const loadExtractionResult = async (loanId) => {
     setLoadingExtraction(true);
@@ -353,7 +341,6 @@ export default function BankAdminDashboard() {
   useEffect(() => {
     if (user?.bank_name) {
       fetchPolicies();
-      fetchRuleInventory();
     }
   }, [user?.bank_name]);
 
@@ -425,14 +412,7 @@ export default function BankAdminDashboard() {
     }
   };
 
-  const handleExtractRules = async (id) => {
-    try {
-      await bankApi.extractPolicyRules(id);
-      alert('Extraction job submitted successfully. The rules will appear in the inventory shortly.');
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to extract policy rules');
-    }
-  };
+
 
   const handleOpenPolicyDoc = (doc) => {
     setViewingConfidentialDoc(doc._id || doc.id);
@@ -816,15 +796,9 @@ export default function BankAdminDashboard() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 relative z-10">
         
         {}
-        <div className="bg-gradient-to-r from-emerald-600/10 via-teal-600/5 to-transparent border border-white/5 rounded-3xl p-6 sm:p-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10 space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Underwriter Command Center</span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Active Evaluation Queue</h1>
-            <p className="text-slate-400 text-xs max-w-lg font-medium leading-relaxed">
-              Analyze applicant profiles, audit submitted tax balance sheets, log transition notes, and flag missing records.
-            </p>
-          </div>
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Loan Underwriting Dashboard</h1>
+          <p className="text-slate-400 text-xs">Review loan applications, manage credit policies, assess risk profiles, and track evaluation decisions.</p>
         </div>
 
         {}
@@ -1082,15 +1056,6 @@ export default function BankAdminDashboard() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleExtractRules(doc._id || doc.id);
-                                    }}
-                                    className="text-purple-400 hover:text-purple-300 font-semibold text-[11px] transition-colors"
-                                  >
-                                    Extract Rules
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
                                       handleStartEditPolicy(doc);
                                     }}
                                     className="text-amber-400 hover:text-amber-300 font-semibold text-[11px] transition-colors"
@@ -1249,84 +1214,7 @@ export default function BankAdminDashboard() {
           </div>
         </div>
 
-        {/* Bank Policy Rule Inventory Viewer */}
-        <div className="mt-6">
-          <Card className="w-full">
-            <CardHeader className="pb-3 border-b border-white/5 py-4 flex flex-row justify-between items-center">
-              <div>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Database className="w-4.5 h-4.5 text-blue-400" />
-                  Bank Extracted Rule Inventory
-                </CardTitle>
-                <CardDescription className="text-[10px] text-slate-400 mt-1">
-                  Database of automated checks derived from uploaded policy documents
-                </CardDescription>
-              </div>
-              {loadingRuleInventory && (
-                <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-              )}
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="max-h-[300px] overflow-y-auto">
-                <Table className="w-full text-xs">
-                  <TableHeader className="bg-slate-900/50 sticky top-0 z-10">
-                    <TableRow className="border-white/5 hover:bg-transparent">
-                      <TableHead className="text-[9px] font-bold uppercase tracking-wider text-slate-400 h-8">Rule ID</TableHead>
-                      <TableHead className="text-[9px] font-bold uppercase tracking-wider text-slate-400 h-8">Rule Name</TableHead>
-                      <TableHead className="text-[9px] font-bold uppercase tracking-wider text-slate-400 h-8">Type</TableHead>
-                      <TableHead className="text-[9px] font-bold uppercase tracking-wider text-slate-400 h-8">Parameters</TableHead>
-                      <TableHead className="text-[9px] font-bold uppercase tracking-wider text-slate-400 h-8">Condition</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ruleInventory.length > 0 ? (
-                      ruleInventory.map((rule) => (
-                        <TableRow key={rule.id || rule.rule_id} className="border-white/5 hover:bg-white/[0.02]">
-                          <TableCell className="font-mono text-[9px] text-slate-500">{(rule.rule_id || rule.id || '').substring(0, 8)}</TableCell>
-                          <TableCell className="font-medium text-slate-300">{rule.parameter || rule.rule_name || <span className="text-slate-600 italic">—</span>}</TableCell>
-                          <TableCell>
-                            <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[8px] uppercase">
-                              {rule.rule_type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-slate-400">
-                            {rule.parameter ? (
-                              <div className="text-[9px]">
-                                <span className="font-mono text-emerald-400">{rule.category || 'General'}</span>
-                                {rule.policy_section && (
-                                  <div className="text-slate-500 mt-0.5">§ {rule.policy_section}</div>
-                                )}
-                                {rule.policy_page != null && (
-                                  <div className="text-slate-500 mt-0.5">Page {rule.policy_page}</div>
-                                )}
-                              </div>
-                            ) : (
-                              Object.entries(rule.parameters || {}).map(([key, val]) => (
-                                <div key={key} className="flex gap-2 text-[9px]">
-                                  <span className="font-mono text-emerald-400">{key}:</span>
-                                  <span>{val}</span>
-                                </div>
-                              ))
-                            )}
-                          </TableCell>
-                          <TableCell className="font-mono text-[9px] text-slate-500 bg-slate-950 p-2 rounded truncate max-w-[200px]">
-                            {rule.description || rule.condition_expression}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-6 text-slate-500 italic">
-                          No automated rules extracted. Upload policy documents and run extraction.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+
 
         {}
         <div className="flex flex-col sm:flex-row gap-4 bg-slate-900/60 border border-white/5 p-4 rounded-2xl relative z-10">

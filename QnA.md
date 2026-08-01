@@ -10,16 +10,16 @@
 
 The authentication system follows a **two-phase login flow with mandatory MFA (Multi-Factor Authentication)** across two distinct user types — **SME Applicants** and **Bank Administrators**. The system is built on:
 
-| Layer | Technology |
-|---|---|
+| Layer                | Technology                                                                                                  |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- |
 | **Password Hashing** | Argon2 (via [`argon2`](file:///e:/Desktop/Web%20Development/CapitalScale/backend/package.json) npm package) |
-| **Token Management** | JWT (`jsonwebtoken`) — access tokens + refresh tokens |
-| **Session Store** | Redis (`ioredis`) — server-side session + token blacklisting |
-| **Database** | Supabase (PostgreSQL) — user tables, roles, permissions, OTPs |
-| **Input Validation** | Zod schemas |
-| **Rate Limiting** | `express-rate-limit` |
-| **HTTP Security** | Helmet, CORS, HttpOnly cookies |
-| **Frontend State** | Zustand (persisted) + React Context |
+| **Token Management** | JWT (`jsonwebtoken`) — access tokens + refresh tokens                                                       |
+| **Session Store**    | Redis (`ioredis`) — server-side session + token blacklisting                                                |
+| **Database**         | Supabase (PostgreSQL) — user tables, roles, permissions, OTPs                                               |
+| **Input Validation** | Zod schemas                                                                                                 |
+| **Rate Limiting**    | `express-rate-limit`                                                                                        |
+| **HTTP Security**    | Helmet, CORS, HttpOnly cookies                                                                              |
+| **Frontend State**   | Zustand (persisted) + React Context                                                                         |
 
 ---
 
@@ -36,10 +36,12 @@ export const ROLES = Object.freeze({
 ```
 
 Each user type has its own database table:
+
 - **`sme_users`** — SME loan applicants (fields: `full_name`, `business_name`, `phone`, `email`, `password_hash`, `role_id`, `address`, `is_verified`, `is_active`, `is_deleted`, etc.)
 - **`bank_admin_users`** — Bank administrators/underwriters (fields: `bank_name`, `branch_name`, `branch_address`, `ifsc_code`, `admin_name`, `email`, `phone`, `password_hash`, `role_id`, `is_active`, `is_deleted`, etc.)
 
 Roles are also stored in a **`roles`** table and referenced via `role_id` foreign key. On registration:
+
 - SME users get the `sme_applicant` role
 - Bank admins get the `bank_underwriter` role
 
@@ -52,6 +54,7 @@ A separate **`role_permissions`** junction table and **`permissions`** table ena
 #### 3.1 Registration
 
 **SME Registration** (`POST /api/v1/auth/sme/register`):
+
 1. Request passes through `authRateLimiter` (max 10 requests / 15 min) → `validate(smeRegisterSchema)` (Zod)
 2. [auth.service.js#L34-L53](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/services/auth.service.js#L34-L53):
    - Checks for duplicate email via `findSMEByEmail()`
@@ -63,6 +66,7 @@ A separate **`role_permissions`** junction table and **`permissions`** table ena
    - Returns `{ mfaRequired: true, tempToken, user }` — the user is **NOT** logged in yet
 
 **Bank Admin Registration** (`POST /api/v1/auth/bank/register`):
+
 - Same flow but creates in `bank_admin_users` with `bank_underwriter` role
 - See [auth.service.js#L72-L91](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/services/auth.service.js#L72-L91)
 
@@ -71,6 +75,7 @@ A separate **`role_permissions`** junction table and **`permissions`** table ena
 #### 3.2 Login (Phase 1 — Credential Verification)
 
 **SME Login** (`POST /api/v1/auth/sme/login`):
+
 1. Rate limited + validated with `loginSchema`
 2. [auth.service.js#L55-L68](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/services/auth.service.js#L55-L68):
    - Finds user by email (including `password_hash`)
@@ -121,6 +126,7 @@ Defined in [token.utils.js](file:///e:/Desktop/Web%20Development/CapitalScale/ba
 | **MFA Temp Token** | `JWT_MFA_SECRET` (separate key) | `5m` (hardcoded) | Short-lived, bridges login → OTP verification. Audience: `capitalscale:mfa` |
 
 **Access Token Payload** (via [buildTokenPayload](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/utils/token.utils.js#L78-L86)):
+
 ```js
 {
   id,            // user UUID
@@ -136,6 +142,7 @@ Defined in [token.utils.js](file:///e:/Desktop/Web%20Development/CapitalScale/ba
 ```
 
 **Refresh Token Cookie** settings ([token.utils.js#L57-L65](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/utils/token.utils.js#L57-L65)):
+
 ```js
 {
   httpOnly: true,                          // not accessible to JS
@@ -152,21 +159,19 @@ Defined in [token.utils.js](file:///e:/Desktop/Web%20Development/CapitalScale/ba
 
 All session logic lives in [redis.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/redis.js):
 
-| Operation | Redis Key Pattern | TTL |
-|---|---|---|
-| `setSession(sessionId, data)` | `session:<jti>` | 30 days |
-| `getSession(sessionId)` | `session:<jti>` | — |
-| `deleteSession(sessionId)` | `session:<jti>` | — |
-| `blacklistToken(jti)` | `blacklist:token:<jti>` | 30 days |
-| `isTokenBlacklisted(jti)` | `blacklist:token:<jti>` | — |
+| Operation                     | Redis Key Pattern       | TTL     |
+| ----------------------------- | ----------------------- | ------- |
+| `setSession(sessionId, data)` | `session:<jti>`         | 30 days |
+| `getSession(sessionId)`       | `session:<jti>`         | —       |
+| `deleteSession(sessionId)`    | `session:<jti>`         | —       |
+| `blacklistToken(jti)`         | `blacklist:token:<jti>` | 30 days |
+| `isTokenBlacklisted(jti)`     | `blacklist:token:<jti>` | —       |
 
 **Session data stored**:
+
 ```js
 {
-  userId, email, role,
-  ipAddress, userAgent,
-  createdAt,
-  permissions  // lazily cached on first permission check
+  (userId, email, role, ipAddress, userAgent, createdAt, permissions); // lazily cached on first permission check
 }
 ```
 
@@ -203,6 +208,7 @@ This implements **refresh token rotation** — the most secure pattern for token
 #### 7.1 `protect` Middleware ([auth.js#L21-L41](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/auth.js#L21-L41))
 
 Applied to every protected route. It:
+
 1. Extracts `Bearer <token>` from the `Authorization` header
 2. Verifies the access token with `JWT_SECRET`
 3. Checks if the session exists in Redis (via `decoded.sessionId`)
@@ -215,6 +221,7 @@ Checks if `req.user.role` is in the allowed roles list. Throws `403 Forbidden` o
 #### 7.3 `authorizePermissions(...perms)` ([auth.js#L67-L95](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/auth.js#L67-L95))
 
 Fine-grained permission check:
+
 1. Fetches session from Redis
 2. Checks if permissions are cached in the session
 3. If not, queries `role_permissions` → `permissions` tables and caches result in the Redis session
@@ -222,13 +229,13 @@ Fine-grained permission check:
 
 #### 7.4 Pre-composed Guards
 
-| Guard | Composition | Used By |
-|---|---|---|
-| `requireSME` | `[protect, authorizeRoles('sme')]` | — (available but unused currently) |
-| `requireBankAdmin` | `[protect, authorizeRoles('bank_admin')]` | — |
-| `requireSuperAdmin` | `[protect, authorizeRoles('super_admin')]` | — |
-| `requireBankOrSuper` | `[protect, authorizeRoles('bank_admin', 'super_admin')]` | Underwriting, Audit Logs |
-| `requireAuth` | `[protect]` | Underwriting (some routes) |
+| Guard                | Composition                                              | Used By                            |
+| -------------------- | -------------------------------------------------------- | ---------------------------------- |
+| `requireSME`         | `[protect, authorizeRoles('sme')]`                       | — (available but unused currently) |
+| `requireBankAdmin`   | `[protect, authorizeRoles('bank_admin')]`                | —                                  |
+| `requireSuperAdmin`  | `[protect, authorizeRoles('super_admin')]`               | —                                  |
+| `requireBankOrSuper` | `[protect, authorizeRoles('bank_admin', 'super_admin')]` | Underwriting, Audit Logs           |
+| `requireAuth`        | `[protect]`                                              | Underwriting (some routes)         |
 
 ---
 
@@ -236,11 +243,11 @@ Fine-grained permission check:
 
 Defined in [rateLimiter.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/rateLimiter.js):
 
-| Limiter | Window | Max Requests | Applied To |
-|---|---|---|---|
-| `rateLimiter` | `RATE_LIMIT_WINDOW_MS` (default 15 min) | `RATE_LIMIT_MAX` (default 100) | All `/api` routes (global) |
-| `authRateLimiter` | 15 minutes | 10 | Registration, login, MFA verify |
-| `otpRateLimiter` | 5 minutes | 5 | Bank account OTP send |
+| Limiter           | Window                                  | Max Requests                   | Applied To                      |
+| ----------------- | --------------------------------------- | ------------------------------ | ------------------------------- |
+| `rateLimiter`     | `RATE_LIMIT_WINDOW_MS` (default 15 min) | `RATE_LIMIT_MAX` (default 100) | All `/api` routes (global)      |
+| `authRateLimiter` | 15 minutes                              | 10                             | Registration, login, MFA verify |
+| `otpRateLimiter`  | 5 minutes                               | 5                              | Bank account OTP send           |
 
 ---
 
@@ -249,6 +256,7 @@ Defined in [rateLimiter.js](file:///e:/Desktop/Web%20Development/CapitalScale/ba
 Defined in [auth.validator.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/validators/auth.validator.js):
 
 **Password Policy** (`strongPassword`):
+
 - Minimum 8 characters
 - At least 1 uppercase letter
 - At least 1 number
@@ -266,30 +274,31 @@ The [validate](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/mid
 
 ### 10. Route-Level Authorization Map
 
-| Route Group | Auth Middleware | Role Restriction |
-|---|---|---|
-| `POST /auth/sme/*` | `authRateLimiter` only | Public |
-| `POST /auth/bank/*` | `authRateLimiter` only | Public |
-| `POST /auth/mfa/verify` | `authRateLimiter` only | Public |
-| `POST /auth/refresh` | None | Public (uses cookie) |
-| `POST /auth/logout` | `protect` | Any authenticated user |
-| `GET /auth/me` | `protect` | Any authenticated user |
-| `/loans/*` | `protect` (router-level) | Various per-route `authorizeRoles()` |
-| `POST /loans/` | `protect` + `authorizeRoles(SME)` | SME only |
-| `PATCH /loans/:id` | `protect` + `authorizeRoles(BANK_ADMIN, SUPER_ADMIN)` | Bank/Super only |
-| `DELETE /loans/:id` | `protect` + `authorizeRoles(SUPER_ADMIN)` | Super Admin only |
-| `/banks/*` | `protect` + `authorizeRoles(SME)` | SME only |
-| `/bank-policies/*` | `protect` + `authorizeRoles(BANK_ADMIN)` | Bank Admin only |
-| `/ocr/*` (most) | `protect` | Any authenticated user |
-| `PATCH /ocr/jobs/:id/vectorized` | **None** | ⚠️ Public (no auth) |
-| `/extraction/*` (callbacks) | **None** | ⚠️ Public (webhook callbacks) |
-| `/extraction/*` (triggers) | `protect` + `authorizeRoles(BANK_ADMIN, SUPER_ADMIN)` | Bank/Super only |
-| `/underwriting/*` | `requireBankOrSuper` or `requireAuth` | Mixed |
-| `/audit-logs` | `requireBankOrSuper` | Bank/Super only |
-| `/users/*` | **None** | ⚠️ Not implemented, no auth |
+| Route Group                      | Auth Middleware                                       | Role Restriction                     |
+| -------------------------------- | ----------------------------------------------------- | ------------------------------------ |
+| `POST /auth/sme/*`               | `authRateLimiter` only                                | Public                               |
+| `POST /auth/bank/*`              | `authRateLimiter` only                                | Public                               |
+| `POST /auth/mfa/verify`          | `authRateLimiter` only                                | Public                               |
+| `POST /auth/refresh`             | None                                                  | Public (uses cookie)                 |
+| `POST /auth/logout`              | `protect`                                             | Any authenticated user               |
+| `GET /auth/me`                   | `protect`                                             | Any authenticated user               |
+| `/loans/*`                       | `protect` (router-level)                              | Various per-route `authorizeRoles()` |
+| `POST /loans/`                   | `protect` + `authorizeRoles(SME)`                     | SME only                             |
+| `PATCH /loans/:id`               | `protect` + `authorizeRoles(BANK_ADMIN, SUPER_ADMIN)` | Bank/Super only                      |
+| `DELETE /loans/:id`              | `protect` + `authorizeRoles(SUPER_ADMIN)`             | Super Admin only                     |
+| `/banks/*`                       | `protect` + `authorizeRoles(SME)`                     | SME only                             |
+| `/bank-policies/*`               | `protect` + `authorizeRoles(BANK_ADMIN)`              | Bank Admin only                      |
+| `/ocr/*` (most)                  | `protect`                                             | Any authenticated user               |
+| `PATCH /ocr/jobs/:id/vectorized` | **None**                                              | ⚠️ Public (no auth)                  |
+| `/extraction/*` (callbacks)      | **None**                                              | ⚠️ Public (webhook callbacks)        |
+| `/extraction/*` (triggers)       | `protect` + `authorizeRoles(BANK_ADMIN, SUPER_ADMIN)` | Bank/Super only                      |
+| `/underwriting/*`                | `requireBankOrSuper` or `requireAuth`                 | Mixed                                |
+| `/audit-logs`                    | `requireBankOrSuper`                                  | Bank/Super only                      |
+| `/users/*`                       | **None**                                              | ⚠️ Not implemented, no auth          |
 
 > [!CAUTION]
 > **Unprotected Routes**: The following routes are publicly accessible without any authentication:
+>
 > - `PATCH /api/v1/ocr/jobs/:jobId/vectorized` — marks OCR jobs as vectorized
 > - `PATCH /api/v1/extraction/loans/:loanId/extraction-status` — updates extraction status
 > - `PATCH /api/v1/extraction/loans/:loanId/missing-info` — updates missing info
@@ -304,6 +313,7 @@ The [validate](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/mid
 #### 11.1 State Management — Zustand Store
 
 [authStore.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/store/authStore.js):
+
 - State: `user`, `accessToken`, `isLoading`, `error`
 - **Persistence**: Only `user` is persisted to `localStorage` (key: `ai-loan-auth`) — the access token is intentionally **not** persisted for security
 - Helpers: `isAuthenticated()`, `hasRole(...roles)`, `getRoleLabel()`
@@ -311,6 +321,7 @@ The [validate](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/mid
 #### 11.2 Auth Context — React Context Provider
 
 [AuthContext.jsx](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/context/AuthContext.jsx):
+
 - Wraps the Zustand store with React Context
 - Exposes methods: `loginSME()`, `loginBank()`, `registerSME()`, `registerBank()`, `verifyMfa()`, `logout()`
 - **Boot-time refresh**: On mount, if a `user` exists in localStorage but no `accessToken` in memory, it automatically calls `/auth/refresh` to restore the session via the HttpOnly cookie
@@ -323,6 +334,7 @@ The [validate](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/mid
 **Request Interceptor**: Automatically attaches `Authorization: Bearer <accessToken>` from the Zustand store to every outgoing request.
 
 **Response Interceptor** (401 handling):
+
 - On a `401` response (except for `/auth/` endpoints):
   1. Queues the failed request
   2. Calls `POST /auth/refresh` (using raw `axios`, not the intercepted client, to avoid infinite loops)
@@ -333,20 +345,21 @@ The [validate](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/mid
 #### 11.4 Route Protection
 
 [ProtectedRoute.jsx](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/components/ProtectedRoute.jsx):
+
 - Shows a loading spinner during `isInitializing`
 - Redirects to `/login` if not authenticated (preserving the `from` location for redirect-after-login)
 - Redirects to `/unauthorized` if the user's role doesn't match the required roles
 
 **Frontend Route Authorization** (from [App.jsx](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/App.jsx)):
 
-| Route | Protection | Role |
-|---|---|---|
-| `/`, `/login` | Redirect to `/dashboard` if authenticated | Public |
-| `/sme/login`, `/sme/register` | Redirect to `/dashboard` if authenticated | Public |
-| `/bank/login`, `/bank/register` | Redirect to `/dashboard` if authenticated | Public |
-| `/dashboard` | `ProtectedRoute` | Any authenticated |
-| `/loan/apply` | `ProtectedRoute roles={['sme']}` | SME only |
-| `/unauthorized` | None | Public |
+| Route                           | Protection                                | Role              |
+| ------------------------------- | ----------------------------------------- | ----------------- |
+| `/`, `/login`                   | Redirect to `/dashboard` if authenticated | Public            |
+| `/sme/login`, `/sme/register`   | Redirect to `/dashboard` if authenticated | Public            |
+| `/bank/login`, `/bank/register` | Redirect to `/dashboard` if authenticated | Public            |
+| `/dashboard`                    | `ProtectedRoute`                          | Any authenticated |
+| `/loan/apply`                   | `ProtectedRoute roles={['sme']}`          | SME only          |
+| `/unauthorized`                 | None                                      | Public            |
 
 ---
 
@@ -381,49 +394,49 @@ All audit log calls are wrapped in `.catch(() => {})` to ensure they never break
 
 ### 14. Security Measures Summary
 
-| Feature | Implementation |
-|---|---|
-| **Password Hashing** | Argon2 (memory-hard, resistant to GPU attacks) |
-| **MFA** | Email OTP, 6-digit, 5-min expiry, max 3 attempts |
-| **Token Rotation** | Refresh tokens are single-use; old ones are blacklisted |
-| **Reuse Detection** | Blacklisted token reuse triggers security audit log |
-| **HttpOnly Cookies** | Refresh token stored in HttpOnly, Secure, SameSite cookie |
-| **Helmet** | Sets security headers (CSP, X-Frame-Options, etc.) |
-| **CORS** | Strict origin whitelist, credentials enabled |
-| **Rate Limiting** | Auth: 10/15min, OTP: 5/5min, Global: 100/15min |
-| **Input Validation** | Zod schemas on all auth endpoints |
-| **Session Validation** | Every protected request checks Redis session existence |
-| **Account Deactivation** | `is_active` flag checked on login and token refresh |
-| **Soft Deletion** | `is_deleted` flag — soft-deleted users can't login |
-| **Audit Trail** | Comprehensive logging of all auth events |
-| **Error Handling** | JWT errors (`JsonWebTokenError`, `TokenExpiredError`) caught by global error handler |
-| **Token Scoping** | Access token uses `JWT_SECRET`, refresh token uses separate `JWT_REFRESH_SECRET` |
+| Feature                  | Implementation                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| **Password Hashing**     | Argon2 (memory-hard, resistant to GPU attacks)                                       |
+| **MFA**                  | Email OTP, 6-digit, 5-min expiry, max 3 attempts                                     |
+| **Token Rotation**       | Refresh tokens are single-use; old ones are blacklisted                              |
+| **Reuse Detection**      | Blacklisted token reuse triggers security audit log                                  |
+| **HttpOnly Cookies**     | Refresh token stored in HttpOnly, Secure, SameSite cookie                            |
+| **Helmet**               | Sets security headers (CSP, X-Frame-Options, etc.)                                   |
+| **CORS**                 | Strict origin whitelist, credentials enabled                                         |
+| **Rate Limiting**        | Auth: 10/15min, OTP: 5/5min, Global: 100/15min                                       |
+| **Input Validation**     | Zod schemas on all auth endpoints                                                    |
+| **Session Validation**   | Every protected request checks Redis session existence                               |
+| **Account Deactivation** | `is_active` flag checked on login and token refresh                                  |
+| **Soft Deletion**        | `is_deleted` flag — soft-deleted users can't login                                   |
+| **Audit Trail**          | Comprehensive logging of all auth events                                             |
+| **Error Handling**       | JWT errors (`JsonWebTokenError`, `TokenExpiredError`) caught by global error handler |
+| **Token Scoping**        | Access token uses `JWT_SECRET`, refresh token uses separate `JWT_REFRESH_SECRET`     |
 
 ---
 
 ### 15. File Reference Map
 
-| File | Location | Purpose |
-|---|---|---|
-| [auth.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/auth.js) | Backend Middleware | `protect`, `authorizeRoles`, `authorizePermissions`, pre-composed guards |
-| [auth.controller.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/controllers/auth.controller.js) | Backend Controller | HTTP handlers for register, login, MFA, refresh, logout, me |
-| [auth.service.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/services/auth.service.js) | Backend Service | Core auth business logic — registration, login, MFA verify, refresh, logout |
-| [token.utils.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/utils/token.utils.js) | Backend Utils | JWT generation/verification, cookie helpers, payload builders |
-| [auth.validator.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/validators/auth.validator.js) | Backend Validators | Zod schemas for registration, login, refresh |
-| [auth.routes.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/routes/v1/auth.routes.js) | Backend Routes | Route definitions for `/api/v1/auth/*` |
-| [redis.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/redis.js) | Backend Config | Redis session CRUD + token blacklisting |
-| [users.queries.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/db/queries/users.queries.js) | Backend DB | User CRUD, role lookup, permission queries |
-| [otps.queries.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/db/queries/otps.queries.js) | Backend DB | OTP CRUD for MFA |
-| [auditLogs.queries.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/db/queries/auditLogs.queries.js) | Backend DB | Audit log recording |
-| [rateLimiter.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/rateLimiter.js) | Backend Middleware | Rate limiting for auth, OTP, and global |
-| [env.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/env.js) | Backend Config | Environment variable validation (JWT secrets, Redis URL, etc.) |
-| [errorHandler.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/errorHandler.js) | Backend Middleware | Catches JWT errors, Zod errors, and converts to API responses |
-| [AuthContext.jsx](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/context/AuthContext.jsx) | Frontend Context | Auth provider with login/register/MFA/logout + boot refresh |
-| [authStore.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/store/authStore.js) | Frontend Store | Zustand store for user + accessToken (persists only `user`) |
-| [auth.api.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/api/auth.api.js) | Frontend API | Axios wrappers for all auth endpoints |
-| [apiClient.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/api/apiClient.js) | Frontend API | Axios instance with auto-attach Bearer token + 401 refresh interceptor |
-| [ProtectedRoute.jsx](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/components/ProtectedRoute.jsx) | Frontend Component | Route guard with role-based access control |
-| [App.jsx](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/App.jsx) | Frontend Root | Route definitions with auth redirects |
+| File                                                                                                                  | Location           | Purpose                                                                     |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------- |
+| [auth.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/auth.js)                           | Backend Middleware | `protect`, `authorizeRoles`, `authorizePermissions`, pre-composed guards    |
+| [auth.controller.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/controllers/auth.controller.js)    | Backend Controller | HTTP handlers for register, login, MFA, refresh, logout, me                 |
+| [auth.service.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/services/auth.service.js)             | Backend Service    | Core auth business logic — registration, login, MFA verify, refresh, logout |
+| [token.utils.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/utils/token.utils.js)                  | Backend Utils      | JWT generation/verification, cookie helpers, payload builders               |
+| [auth.validator.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/validators/auth.validator.js)       | Backend Validators | Zod schemas for registration, login, refresh                                |
+| [auth.routes.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/routes/v1/auth.routes.js)              | Backend Routes     | Route definitions for `/api/v1/auth/*`                                      |
+| [redis.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/redis.js)                             | Backend Config     | Redis session CRUD + token blacklisting                                     |
+| [users.queries.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/db/queries/users.queries.js)         | Backend DB         | User CRUD, role lookup, permission queries                                  |
+| [otps.queries.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/db/queries/otps.queries.js)           | Backend DB         | OTP CRUD for MFA                                                            |
+| [auditLogs.queries.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/db/queries/auditLogs.queries.js) | Backend DB         | Audit log recording                                                         |
+| [rateLimiter.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/rateLimiter.js)             | Backend Middleware | Rate limiting for auth, OTP, and global                                     |
+| [env.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/env.js)                                 | Backend Config     | Environment variable validation (JWT secrets, Redis URL, etc.)              |
+| [errorHandler.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/errorHandler.js)           | Backend Middleware | Catches JWT errors, Zod errors, and converts to API responses               |
+| [AuthContext.jsx](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/context/AuthContext.jsx)             | Frontend Context   | Auth provider with login/register/MFA/logout + boot refresh                 |
+| [authStore.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/store/authStore.js)                     | Frontend Store     | Zustand store for user + accessToken (persists only `user`)                 |
+| [auth.api.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/api/auth.api.js)                         | Frontend API       | Axios wrappers for all auth endpoints                                       |
+| [apiClient.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/api/apiClient.js)                       | Frontend API       | Axios instance with auto-attach Bearer token + 401 refresh interceptor      |
+| [ProtectedRoute.jsx](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/components/ProtectedRoute.jsx)    | Frontend Component | Route guard with role-based access control                                  |
+| [App.jsx](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/App.jsx)                                     | Frontend Root      | Route definitions with auth redirects                                       |
 
 ---
 
@@ -482,7 +495,7 @@ sequenceDiagram
 
 ### 1. Executive Summary & Technology Audit
 
-A thorough search across all backend (`/backend`), frontend (`/frontend`), and AI microservice configurations confirms that **`Socket.IO` and native WebSockets are NOT used in this project**. 
+A thorough search across all backend (`/backend`), frontend (`/frontend`), and AI microservice configurations confirms that **`Socket.IO` and native WebSockets are NOT used in this project**.
 
 Instead, CapitalScale uses a combination of **Server-Sent Events (SSE)** synced via Redis Pub/Sub, **RabbitMQ message brokering**, **Asynchronous Job Delegation**, **Backend-to-Backend Sync Polling**, and **HTTP Webhook Callbacks** to handle long-running operations like document OCR processing, AI parameter extraction, vector embedding, and credit underwriting assessments.
 
@@ -493,19 +506,21 @@ Instead, CapitalScale uses a combination of **Server-Sent Events (SSE)** synced 
 ### 2. Overview of Asynchronous Communication Paradigms
 
 ```
+
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                   COMMUNICATION ARCHITECTURE                                    │
+│ COMMUNICATION ARCHITECTURE │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                                  │
-│  [ React Frontend ] ──(1) HTTP POST Task Trigger ──> [ Express Backend ] ──(2) HTTP POST ──> [ Python AI Service ]│
-│         │                                                    │                                   │
-│         │ (4) HTTP Polling (every 3s-5s)                    │ (3) HTTP Sync Polling             │
-│         ▼                                                    ▼       (every 2s)                  │
-│  [ Queue Status Endpoint ]                                [ AI Service Job Status ]              │
-│         ▲                                                    │                                   │
-│         │                                                    │ (5) Webhook Callbacks             │
-│         └──────────────────(6) Sync DB ──────────────────────┴─────────────────> [ Supabase DB ]  │
+│ │
+│ [ React Frontend ] ──(1) HTTP POST Task Trigger ──> [ Express Backend ] ──(2) HTTP POST ──> [ Python AI Service ]│
+│ │ │ │
+│ │ (4) HTTP Polling (every 3s-5s) │ (3) HTTP Sync Polling │
+│ ▼ ▼ (every 2s) │
+│ [ Queue Status Endpoint ] [ AI Service Job Status ] │
+│ ▲ │ │
+│ │ │ (5) Webhook Callbacks │
+│ └──────────────────(6) Sync DB ──────────────────────┴─────────────────> [ Supabase DB ] │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
 ```
 
 Rather than maintaining persistent WebSocket TCP connections, the platform employs **Server-Sent Events (SSE)** and **stateless HTTP async patterns**:
@@ -570,8 +585,10 @@ When reprocessing loan documents in bulk, the Express backend initiates jobs wit
 The Python AI service communicates progress and results back to the Node.js backend via un-authenticated PATCH webhooks.
 
 ```
+
 [ Python AI Microservice ] ── PATCH ──> [ Express Backend Routes ] ──> [ Database Update ]
-```
+
+````
 
 1. **OCR Vectorization Callback**:
    - **Route**: `PATCH /api/v1/ocr/jobs/:jobId/vectorized` ([ocr.routes.js#L60](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/routes/v1/ocr.routes.js#L60))
@@ -595,12 +612,14 @@ To prevent high-frequency polling from triggering 429 Rate Limit errors, polling
 - **Global Rate Limiter** ([rateLimiter.js#L16](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/rateLimiter.js#L16)):
   ```javascript
   skip: (req) => req.originalUrl.includes('/queue/status')
-  ```
+````
+
 - **Request Logger** ([requestLogger.js#L23](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/requestLogger.js#L23)):
   ```javascript
-  skip: (req) => req.url === '/health' || req.url === '/api/health' || req.url.includes('/queue/status')
+  skip: (req) =>
+    req.url === '/health' || req.url === '/api/health' || req.url.includes('/queue/status');
   ```
-  *(This avoids spamming server log files during active client polling).*
+  _(This avoids spamming server log files during active client polling)._
 
 ---
 
@@ -610,11 +629,11 @@ To enhance user experience without incurring the complexity of full WebSocket in
 
 - **File**: [BankAdminDashboard.jsx#L84-L93](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/pages/BankAdminDashboard.jsx#L84-L93)
 - **Mechanism**: When an underwriting assessment is initiated (`assessingLoan` or `reevaluatingLoan` is active), a `setInterval` runs every `5000ms`, cycling through predefined steps:
-  1. *"Initializing Multi-Agent Underwriting Pipeline..."*
-  2. *"Agent [OCR & Financial Parser]: Extracting financial statements..."*
-  3. *"Agent [Risk Assessor]: Running financial ratio analysis..."*
-  4. *"Agent [Underwriter]: Auditing against bank policy directives..."*
-  5. *"Finalizing AI Risk Score and generating report..."*
+  1. _"Initializing Multi-Agent Underwriting Pipeline..."_
+  2. _"Agent [OCR & Financial Parser]: Extracting financial statements..."_
+  3. _"Agent [Risk Assessor]: Running financial ratio analysis..."_
+  4. _"Agent [Underwriter]: Auditing against bank policy directives..."_
+  5. _"Finalizing AI Risk Score and generating report..."_
 
 While this timer runs, the actual status is fetched in the background via HTTP short polling (`pollQueueJob`).
 
@@ -622,14 +641,14 @@ While this timer runs, the actual status is fetched in the background via HTTP s
 
 ### 4. Comparison: Socket.IO vs. Current Architecture
 
-| Feature / Criteria | Socket.IO (WebSockets) | Current Project Implementation (HTTP Polling + Webhooks) |
-|---|---|---|
-| **Protocol** | WebSockets (TCP bi-directional) with HTTP long-polling fallback | Standard RESTful HTTP GET / POST / PATCH requests |
-| **Server Overhead** | High persistent memory usage per connected socket client | Low memory usage; stateless HTTP endpoints |
+| Feature / Criteria           | Socket.IO (WebSockets)                                                          | Current Project Implementation (HTTP Polling + Webhooks)                                |
+| ---------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **Protocol**                 | WebSockets (TCP bi-directional) with HTTP long-polling fallback                 | Standard RESTful HTTP GET / POST / PATCH requests                                       |
+| **Server Overhead**          | High persistent memory usage per connected socket client                        | Low memory usage; stateless HTTP endpoints                                              |
 | **Infrastructure Readiness** | Requires sticky sessions or Redis Adapter for multi-instance horizontal scaling | Fully stateless; natively works with serverless/PaaS deployments (e.g., Render, Vercel) |
-| **Network Traffic** | Minimal frame header overhead per update | Slightly higher header overhead per HTTP poll |
-| **Real-time Latency** | Instant (< 50ms) | Poll interval delay (3 to 5 seconds) |
-| **Complexity** | High (reconnection logic, heartbeat, socket authentication) | Low (simple HTTP retry loops & `setInterval`) |
+| **Network Traffic**          | Minimal frame header overhead per update                                        | Slightly higher header overhead per HTTP poll                                           |
+| **Real-time Latency**        | Instant (< 50ms)                                                                | Poll interval delay (3 to 5 seconds)                                                    |
+| **Complexity**               | High (reconnection logic, heartbeat, socket authentication)                     | Low (simple HTTP retry loops & `setInterval`)                                           |
 
 ---
 
@@ -673,6 +692,7 @@ CapitalScale uses a **Hybrid Authentication Model** that combines **Stateless JS
 ```
 
 #### Why a Hybrid Approach?
+
 - **Pure JWTs** are stateless and fast, but **cannot be revoked** immediately before expiry without a centralized blacklist.
 - **Pure Database Sessions** allow instant revocation, but require **expensive database queries** on every single API request.
 - **CapitalScale's Hybrid Strategy**:
@@ -685,6 +705,7 @@ CapitalScale uses a **Hybrid Authentication Model** that combines **Stateless JS
 ### 2. Token & Session Data Schemas
 
 #### 2.1 Access Token (JWT Payload)
+
 Signed using `JWT_SECRET` (see [token.utils.js#L14-L23](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/utils/token.utils.js#L14-L23)):
 
 ```json
@@ -702,6 +723,7 @@ Signed using `JWT_SECRET` (see [token.utils.js#L14-L23](file:///e:/Desktop/Web%2
 ```
 
 #### 2.2 Refresh Token (HttpOnly Cookie)
+
 Signed using `JWT_REFRESH_SECRET` (see [token.utils.js#L26-L31](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/utils/token.utils.js#L26-L31)):
 
 ```json
@@ -714,12 +736,14 @@ Signed using `JWT_REFRESH_SECRET` (see [token.utils.js#L26-L31](file:///e:/Deskt
 ```
 
 **Cookie Settings**:
+
 - `httpOnly: true` (Shields token against XSS attacks)
 - `secure: true` in production (Transmitted over HTTPS only)
 - `sameSite: 'strict'` in production / `'lax'` in dev (Mitigates CSRF attacks)
 - `path: '/api/v1/auth'` (Restricts cookie payload to authentication endpoints only)
 
 #### 2.3 Redis Session Object (`session:<sessionId>`)
+
 Stored in Redis with a default TTL of 30 days (see [redis.js#L31-L34](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/redis.js#L31-L34)):
 
 ```json
@@ -735,6 +759,7 @@ Stored in Redis with a default TTL of 30 days (see [redis.js#L31-L34](file:///e:
 ```
 
 #### 2.4 Redis Blacklist Entry (`blacklist:token:<jti>`)
+
 Used for token rotation security and reuse detection (see [redis.js#L50-L53](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/redis.js#L50-L53)):
 
 - Key: `blacklist:token:<oldJti>`
@@ -762,6 +787,7 @@ Used for token rotation security and reuse detection (see [redis.js#L50-L53](fil
 ```
 
 #### Step 1: Credentials & MFA Verification (Session Creation)
+
 1. User provides credentials (`email` + `password`).
 2. Server verifies password hash using **Argon2** and generates a 5-minute OTP stored in `otp_codes` DB table.
 3. User enters 6-digit OTP along with the temporary MFA token.
@@ -776,6 +802,7 @@ Used for token rotation security and reuse detection (see [redis.js#L50-L53](fil
 ---
 
 #### Step 2: Request Authentication & Guarding (`protect` Middleware)
+
 Every protected API request passes through the `protect` middleware ([auth.js#L21-L41](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/auth.js#L21-L41)):
 
 ```
@@ -806,6 +833,7 @@ Every protected API request passes through the `protect` middleware ([auth.js#L2
 ---
 
 #### Step 3: Granular Role & Permission Verification
+
 - **Role Guard** (`authorizeRoles` in [auth.js#L47-L60](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/auth.js#L47-L60)): Checks if `req.user.role` matches allowed roles (e.g., `'sme'`, `'bank_admin'`, `'super_admin'`).
 - **Permission Guard** (`authorizePermissions` in [auth.js#L67-L95](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/auth.js#L67-L95)):
   - Checks if `session.permissions` array exists in Redis.
@@ -815,6 +843,7 @@ Every protected API request passes through the `protect` middleware ([auth.js#L2
 ---
 
 #### Step 4: Frontend State & Auto-Refresh Interceptor Flow
+
 The React client manages state and handles token expiration transparently:
 
 1. **State Persistence** ([authStore.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/store/authStore.js)):
@@ -881,6 +910,7 @@ When `POST /api/v1/auth/refresh` is called ([auth.service.js#L162-L194](file:///
 ---
 
 #### Step 6: Session Termination & Logout
+
 When user logs out (`POST /api/v1/auth/logout`):
 
 1. Backend ([auth.service.js#L198-L204](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/services/auth.service.js#L198-L204)):
@@ -894,15 +924,15 @@ When user logs out (`POST /api/v1/auth/logout`):
 
 ### 4. Summary Matrix of Auth Components
 
-| Component | Responsibility | Relevant Files |
-|---|---|---|
-| **JWT Access Token** | Short-term stateless caller verification | [token.utils.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/utils/token.utils.js), [auth.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/auth.js) |
-| **JWT Refresh Token** | Long-term secure session extension via cookie | [token.utils.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/utils/token.utils.js), [auth.service.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/services/auth.service.js) |
-| **Redis Session Store** | Stateful session tracking, instant revocation & permission caching | [redis.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/redis.js) |
-| **Redis Blacklist** | Prevents replay attacks during refresh token rotation | [redis.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/redis.js), [auth.service.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/services/auth.service.js) |
-| **Zustand Auth Store** | In-memory token storage & UI role access helpers | [authStore.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/store/authStore.js) |
-| **Axios Interceptor** | Auto-injects Bearer token & transparently handles 401 token refresh | [apiClient.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/api/apiClient.js) |
-| **Audit Logger** | Audit trail recording for security events (login, logout, fraud alerts) | [auditLogs.queries.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/db/queries/auditLogs.queries.js) |
+| Component               | Responsibility                                                          | Relevant Files                                                                                                                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **JWT Access Token**    | Short-term stateless caller verification                                | [token.utils.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/utils/token.utils.js), [auth.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/middleware/auth.js)               |
+| **JWT Refresh Token**   | Long-term secure session extension via cookie                           | [token.utils.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/utils/token.utils.js), [auth.service.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/services/auth.service.js) |
+| **Redis Session Store** | Stateful session tracking, instant revocation & permission caching      | [redis.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/redis.js)                                                                                                                       |
+| **Redis Blacklist**     | Prevents replay attacks during refresh token rotation                   | [redis.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/config/redis.js), [auth.service.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/services/auth.service.js)            |
+| **Zustand Auth Store**  | In-memory token storage & UI role access helpers                        | [authStore.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/store/authStore.js)                                                                                                               |
+| **Axios Interceptor**   | Auto-injects Bearer token & transparently handles 401 token refresh     | [apiClient.js](file:///e:/Desktop/Web%20Development/CapitalScale/frontend/src/api/apiClient.js)                                                                                                                 |
+| **Audit Logger**        | Audit trail recording for security events (login, logout, fraud alerts) | [auditLogs.queries.js](file:///e:/Desktop/Web%20Development/CapitalScale/backend/src/db/queries/auditLogs.queries.js)                                                                                           |
 
 ---
 
@@ -936,6 +966,7 @@ The core RAG logic is implemented in the Python AI Microservice (`/ai-services-p
 ### 2. Step-by-Step RAG Pipeline
 
 #### Step 1: Smart Document Chunking (`services/rag/chunking/`)
+
 Naive text splitting (e.g., breaking text every 500 words) destroys table structures and splits context. CapitalScale uses a **Strategy Pattern** ([strategies.py](file:///e:/Desktop/Web%20Development/CapitalScale/ai-services-python/services/rag/chunking/strategies.py)) via `ChunkingStrategyFactory` to apply document-specific chunking logic:
 
 - **BankPolicySemanticStrategy**: Groups rules by hierarchical headings (Chapter/Section). Crucially, it identifies exception/caveat clauses (e.g., lines starting with "Exception:" or "Note:") and "glues" them to the preceding rule so the LLM never sees a rule without its exceptions.
@@ -943,15 +974,18 @@ Naive text splitting (e.g., breaking text every 500 words) destroys table struct
 - **Structured Fact Extraction**: As text is chunked, a `StructuredFactExtractor` pulls out key-value data (e.g., names, dates, amounts) and injects them directly into the chunk's JSONb metadata for deterministic keyword fallback.
 
 #### Step 2: Embedding Generation & Rate Limiting (`services/llm/llm_facade.py`)
+
 - Chunks are converted to dense vector embeddings using **Google Gemini** (`models/text-embedding-004`).
 - All LLM calls route through `llm_facade.py`, which utilizes a global `gemini_limiter` ([rate_limiter.py](file:///e:/Desktop/Web%20Development/CapitalScale/ai-services-python/services/llm/rate_limiter.py)). This ensures the system does not violate free-tier API quotas (e.g., 15 requests per minute) by throttling background OCR embeddings.
 
 #### Step 3: Vector Storage (`services/vectordb/pgvector_service.py`)
+
 - Embeddings are stored in PostgreSQL using the `pgvector` extension in the `document_embeddings` table.
 - Each chunk contains rich metadata: `application_id`, `source_document`, `document_type`, `page_number`, and `chunk_index`.
 - Database operations use atomic transactions. When updating a document, it safely deletes old chunks and inserts new ones simultaneously (`upsert_document_chunks()`).
 
 #### Step 4: Hybrid Retrieval (`services/rag/retrieval_service.py`)
+
 During an underwriting assessment, the system needs to pull evidence for specific questions (e.g., "What is the annual revenue?").
 
 1. **Query Caching**: Standard underwriting questions have their embedding vectors pre-calculated and cached in the `query_embedding_cache` table to save LLM API calls and reduce latency.
@@ -961,12 +995,15 @@ During an underwriting assessment, the system needs to pull evidence for specifi
 5. **Context Merging**: If the retrieval engine pulls chunks 4, 5, and 6 from the same page, the `_merge_group()` function splices them back together into a single continuous block of text, providing the LLM with unbroken context.
 
 #### Step 5: CrossEncoder Re-Ranking (`services/vectordb/reranker.py`)
+
 Vector similarity (cosine distance) is good at finding related topics, but sometimes struggles with exact contextual relevance.
+
 - After fetching the top 15 candidates from Postgres, the pipeline passes them through an ML **CrossEncoder** model (`sentence-transformers`).
 - The CrossEncoder evaluates the pair `(Query, Chunk Text)` and scores them for true semantic relevance.
 - **Latency Optimization**: The CrossEncoder is slow and blocking. The code uses `asyncio.to_thread()` to prevent it from locking the async event loop. Furthermore, if the top Postgres vector match is highly confident (`score > 0.9`), the system short-circuits and skips the re-ranker entirely to save time.
 
 #### Step 6: LLM Synthesis
+
 The final curated, merged, and re-ranked chunks are injected into the context window of the main Underwriting LLM prompt, complete with provenance tags (e.g., `[Evidence Source: ITR_2023.pdf | Type: itr]`). The LLM then generates the final risk score based purely on the provided evidence blocks.
 
 ---
@@ -976,28 +1013,35 @@ The final curated, merged, and re-ranked chunks are injected into the context wi
 The RAG pipeline relies on knowing the document type to apply the correct chunking strategy (e.g., preserving tables in bank statements or grouping sections in bank policies). CapitalScale determines this through a multi-tiered approach, starting at the frontend and ending with heuristic fallbacks in the AI service.
 
 ### 1. Frontend / API Submission (Explicit Typing)
+
 When a user uploads a document, the document type is explicitly defined:
+
 - **SME Dashboard / Loan Uploads**: The frontend provides a `documentType` field in the multipart form data (e.g., `gst_certificate`, `bank_statements`, `id_document`). This is processed in `loan.controller.js` and passed to the OCR service.
 - **Bank Admin Policy Uploads**: In `bankPolicy.controller.js`, the `documentType` is hardcoded as `'bank_policy'` before submission to the OCR engine.
 
 ### 2. Node.js OCR Service Delegation
+
 The `OcrService.submitJob` in the Node.js backend packages the file and metadata, specifically appending `document_type` to the `FormData` payload sent to the Python AI microservice (`/api/v1/ocr/process`).
 
 ### 3. Python AI Service: Normalization & Heuristic Fallbacks
+
 Once the job reaches the background worker (`ocr_queue.py`), the raw `document_type` (and the original file's `document_name`) is passed to `build_document_chunks()`.
 
 Before selecting a strategy, the system calls `normalize_document_type(document_type, document_name)` located in `services/rag/chunking/utils.py`. This function applies a robust two-step normalization:
 
-
 #### A. Dictionary Mapping (`DOC_TYPE_MAP`)
+
 It attempts to map the provided string to a canonical system type. For example:
+
 - `"balance sheet"` or `"profit_and_loss"` ➔ `"financial_statement"`
 - `"id proof"`, `"aadhar"`, `"passport"` ➔ `"identity_document"`
 - `"salary slip"`, `"payslip"` ➔ `"pay_stub"`
 
 #### B. Filename Heuristic Fallback (`FILENAME_HINTS`)
+
 If the explicit `document_type` is missing or unrecognized, the system falls back to analyzing the filename itself.
 If a user uploads `"jan_2024_payslip.pdf"` without specifying the type, the system scans the filename for substrings:
+
 - Contains `"payslip"` ➔ Canonical Type: `"pay_stub"`
 - Contains `"tax"` or `"itr"` ➔ Canonical Type: `"tax_return"`
 - Contains `"pan_card"` ➔ Canonical Type: `"identity_document"`
@@ -1005,7 +1049,9 @@ If a user uploads `"jan_2024_payslip.pdf"` without specifying the type, the syst
 If all heuristics fail, it defaults to `"general"`.
 
 ### 4. Strategy Factory Selection
+
 Finally, the `ChunkingStrategyFactory` ([strategies.py](file:///e:/Desktop/Web%20Development/CapitalScale/ai-services-python/services/rag/chunking/strategies.py)) uses the normalized canonical type to instantiate the exact chunking strategy needed:
+
 - `"bank_policy"` ➔ `BankPolicySemanticStrategy()`
 - `"bank_statement"` ➔ `BankStatementStrategy()`
 - `"financial_statement"` ➔ `FinancialTableStrategy()`
@@ -1013,3 +1059,62 @@ Finally, the `ChunkingStrategyFactory` ([strategies.py](file:///e:/Desktop/Web%2
 - `"general"` ➔ `NarrativeDocumentStrategy()`
 
 This ensures that even if a user uploads a mislabeled file, the filename heuristics provide a safety net to apply the correct chunking parser before vectorization.
+
+
+"""
+================================================================================
+INTERVIEW / ARCHITECTURE EXPLANATION: ProcessingQueue
+================================================================================
+
+1. Purpose and Architecture:
+   - This module implements an asynchronous, database-backed background job queue for
+     processing long-running AI tasks (Extraction, Underwriting, Full Pipeline).
+   - It is designed to run in a single-worker mode (or a controlled number of workers) 
+     as part of an ASGI (FastAPI) application lifecycle (managed via `start()` and `stop()`).
+   - The queue state is persisted in a PostgreSQL table (`loan_processing_jobs`), ensuring
+     job durability across server restarts or crashes.
+
+2. Exported Methods & Core Mechanisms:
+
+   a. start() & stop():
+      - Lifecycle hooks. `start()` creates an asyncio background task running the `_worker_loop()`.
+      - `stop()` gracefully shuts down the loop by setting `_running = False` and explicitly
+        cancelling (`task.cancel()`) the currently executing job if one exists.
+
+   b. _worker_loop() & Database-Backed Priority Queue:
+      - The worker continuously polls the database for jobs with status 'pending' or 'paused'.
+      - Polling query orders by `priority DESC` and `created_at ASC`, inherently implementing
+        a priority queue with FIFO characteristics for jobs of the same priority.
+      - Upon fetching a job, it marks it as 'running'. If the worker task is preempted or 
+        cancelled, it safely rolls back the job status to 'paused' so it can be resumed later.
+      - Network/DB failures during polling are caught, logged as warnings, and gracefully 
+        recovered via a sleep-and-retry mechanism (`asyncio.sleep(5)`).
+
+   c. _process_job(job: dict):
+      - The actual task executor. It branches out based on `task_type` ('extraction', 'underwriting', 
+        or 'full_pipeline').
+      - Handles the orchestration between the AI services and database state updates for the specific loan.
+      - Exception handling ensures that if a task fails entirely (e.g., parsing error, LLM failure), 
+        the job is marked 'failed' with the error message recorded, preventing infinite retry loops on bad data.
+
+   d. enqueue(loan_id, task_type, payload, priority=1):
+      - The standard entry point for adding jobs to the queue.
+      - Simply inserts a new row into `loan_processing_jobs` and returns the job ID.
+      - Default priority is 1.
+
+   e. preempt(admin_loan_id, task_type, payload):
+      - A critical feature for VIP or Admin actions requiring immediate processing.
+      - Enqueues the new job with a high priority (10).
+      - Checks if there is a currently running task (`self.current_task`). If the running task belongs
+        to a different loan, it explicitly calls `.cancel()` on the local asyncio task.
+      - The cancelled task raises an `asyncio.CancelledError`, caught in `_worker_loop()`, which then 
+        sets the preempted job's status back to 'paused'. The worker loop then immediately picks up the 
+        new high-priority job on its next iteration.
+
+3. Concurrency & Scalability Notes:
+   - This specific implementation uses a simple polling mechanism which is great for low-to-medium throughput.
+   - Using `asyncio.sleep` prevents CPU pegging when the queue is empty.
+   - The preempt mechanism relies on running within the same event loop and memory space (since it cancels 
+     the local `self.current_task`). If scaled horizontally (multiple API instances), preemption would 
+     require distributed signaling (e.g., Redis Pub/Sub) or polling for a 'preempted' flag in the database.
+"""

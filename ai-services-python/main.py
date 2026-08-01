@@ -13,6 +13,14 @@ Shutdown sequence:
   2. Close PostgreSQL pool
 """
 import sys
+import os
+from dotenv import load_dotenv
+
+# Load environment variables into os.environ for non-Pydantic libraries (like huggingface_hub)
+load_dotenv()
+# Disable the huggingface weights loading progress bar that looks like a download
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+
 from contextlib import asynccontextmanager
 from loguru import logger
 from fastapi import FastAPI

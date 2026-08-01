@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     DB_POOL_MIN_SIZE: int = 5
     DB_POOL_MAX_SIZE: int = 20
+    
+    REDIS_URL: str = "redis://localhost:6379/0"
 
     
     GEMINI_API_KEY: str | None = None
