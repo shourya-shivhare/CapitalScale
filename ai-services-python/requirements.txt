@@ -30,7 +30,7 @@ unstructured==0.24.1
 opencv-python-headless==4.10.0.84
 # paddlepaddle is installed directly via wheel URL in the Dockerfile
 # (PyPI does not publish manylinux2014 wheels for paddlepaddle on Python 3.11)
-paddleocr==2.7.3
+# paddleocr==2.7.3
 
 # ── LLM ────────────────────────────────────────
 google-generativeai==0.8.3

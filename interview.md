@@ -48,17 +48,19 @@ INFRASTRUCTURE:
 
 ### Key Architectural Decisions
 
-| Decision | The "Why" (Interview Answer) |
-|---|---|
-| **Three-tier separation** | Node.js excels at I/O-heavy HTTP but is terrible at CPU-intensive ML. FastAPI + asyncio handles concurrent AI workloads naturally. Separating them lets each scale independently. |
-| **Monorepo with npm workspaces** | Single repo for all tiers simplifies CI/CD; developers see the entire system; no version drift between services. |
-| **Supabase + asyncpg** | Backend uses Supabase JS SDK for convenience; Python AI service uses asyncpg directly for raw async performance — no ORM overhead for high-throughput embedding inserts. |
-| **Sequential processing queue** | LLM providers have rate limits. A sequential queue guarantees we never burst past quota and provides deterministic ordering — a retry-able job doesn't block others, it gets priority-queued. |
-| **RabbitMQ for notifications** | Decouples business services from email delivery. If SMTP is slow or down, the loan status transition still completes instantly; the email delivery retries independently. |
+| Decision                         | The "Why" (Interview Answer)                                                                                                                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Three-tier separation**        | Node.js excels at I/O-heavy HTTP but is terrible at CPU-intensive ML. FastAPI + asyncio handles concurrent AI workloads naturally. Separating them lets each scale independently.             |
+| **Monorepo with npm workspaces** | Single repo for all tiers simplifies CI/CD; developers see the entire system; no version drift between services.                                                                              |
+| **Supabase + asyncpg**           | Backend uses Supabase JS SDK for convenience; Python AI service uses asyncpg directly for raw async performance — no ORM overhead for high-throughput embedding inserts.                      |
+| **Sequential processing queue**  | LLM providers have rate limits. A sequential queue guarantees we never burst past quota and provides deterministic ordering — a retry-able job doesn't block others, it gets priority-queued. |
+| **RabbitMQ for notifications**   | Decouples business services from email delivery. If SMTP is slow or down, the loan status transition still completes instantly; the email delivery retries independently.                     |
 
 ---
 
 ## Part 2: Authentication — Complete Working Explanation
+
+"Our authentication uses a hybrid model. We issue JWTs for stateless authentication but back them with Redis sessions so tokens can be revoked instantly. Login is a two-phase MFA process: first we verify the password with Argon2, then generate a one-time password. We never store the OTP in plaintext; we store an HMAC-SHA256 hash of it. OTP delivery is asynchronous through RabbitMQ, where an OTP worker sends the email via SMTP, keeping the login API fast. After password verification we return a short-lived MFA token with its own JWT secret and audience. Only after successful OTP verification do we issue the access token, refresh token, and create the Redis session. Using separate JWT secrets and audience claims for access, refresh, and MFA tokens prevents cross-token substitution attacks."
 
 ### High-Level Summary
 
@@ -99,6 +101,7 @@ Client                   Backend                 RabbitMQ                SMTP
 ```
 
 **Key points:**
+
 - Password verified with **Argon2id** (memory-hard — GPU attacks require enormous RAM)
 - OTP is **only stored as HMAC-SHA256 hash** — DB breach cannot reveal OTP codes
 - OTP email dispatched via **RabbitMQ** (fire-and-forget, not blocking the HTTP response)
@@ -135,6 +138,7 @@ Client                   Backend                    Redis
 ```
 
 **Three layers of OTP security:**
+
 1. **HMAC hash** — plaintext never stored
 2. **Redis distributed lock** — only one concurrent verification per user (prevents race-condition brute force that bypasses 3-attempt counter)
 3. **timingSafeEqual** — constant-time comparison prevents timing side-channel attacks
@@ -142,6 +146,7 @@ Client                   Backend                    Redis
 ### Phase 3: API Request Authentication
 
 Every protected API call:
+
 1. Client sends `Authorization: Bearer <accessToken>`
 2. `protect` middleware: `verifyAccessToken(token)` — cryptographic signature check + audience assertion
 3. `getSession(decoded.sessionId)` — checks Redis for active session
@@ -182,19 +187,19 @@ setSession(newJti)  →  Set-Cookie: newRefreshToken  →  Return newAccessToken
 
 ### Security Hardening Summary
 
-| Attack Vector | Defense |
-|---|---|
-| Stolen password | Argon2id hashing + mandatory MFA |
-| Stolen OTP | 5-minute expiry + 3-attempt lockout + HMAC hash in DB |
-| OTP brute-force race condition | Redis distributed lock (SET NX) |
-| DB read reveals OTP | Stored as HMAC-SHA256, not plaintext |
-| Cross-token JWT substitution | Audience claims on all 3 token types |
-| Refresh token reuse (theft) | JTI blacklisting + reuse fraud alert |
-| Redis outage token replay | Fail-safe deny (return true on Redis down) |
-| XSS token theft | Access token in memory only; refresh token HttpOnly cookie |
-| CSRF | SameSite cookie attribute + short expiry |
-| Brute force login | Rate limiter: 10 req/15min on auth endpoints |
-| Internal webhook abuse | x-internal-secret header validation |
+| Attack Vector                  | Defense                                                    |
+| ------------------------------ | ---------------------------------------------------------- |
+| Stolen password                | Argon2id hashing + mandatory MFA                           |
+| Stolen OTP                     | 5-minute expiry + 3-attempt lockout + HMAC hash in DB      |
+| OTP brute-force race condition | Redis distributed lock (SET NX)                            |
+| DB read reveals OTP            | Stored as HMAC-SHA256, not plaintext                       |
+| Cross-token JWT substitution   | Audience claims on all 3 token types                       |
+| Refresh token reuse (theft)    | JTI blacklisting + reuse fraud alert                       |
+| Redis outage token replay      | Fail-safe deny (return true on Redis down)                 |
+| XSS token theft                | Access token in memory only; refresh token HttpOnly cookie |
+| CSRF                           | SameSite cookie attribute + short expiry                   |
+| Brute force login              | Rate limiter: 10 req/15min on auth endpoints               |
+| Internal webhook abuse         | x-internal-secret header validation                        |
 
 ---
 
@@ -268,6 +273,7 @@ For every message on `notification_queue`:
 **The problem:** In production, there may be multiple Node.js instances behind a load balancer. User A is connected via SSE to Instance 1. A loan event fires and triggers `publishSSEEvent()` on Instance 2. Without coordination, Instance 2 can't reach User A's SSE connection.
 
 **The solution:**
+
 ```
 Instance 2 calls:
   publishSSEEvent(userId, data)
@@ -293,6 +299,7 @@ Instance 2 calls:
 ```
 
 **Frontend (NotificationContext.jsx) — Three-layer resilience:**
+
 1. **On login** — immediate REST fetch to catch missed notifications
 2. **SSE EventSource** — `GET /api/v1/notifications/sse?token=<accessToken>` (token as query param because `EventSource` cannot set custom headers)
 3. **30s polling fallback** — `setInterval(fetchNotifications, 30000)` catches any silent SSE connection drops
@@ -300,6 +307,7 @@ Instance 2 calls:
 ### Email Rate Limiting (rateLimiter.service.js)
 
 Redis sliding window per minute:
+
 ```
 email:ratelimit:otp:{minute_epoch}     → OTP bucket (reserved slots)
 email:ratelimit:general:{minute_epoch} → General email bucket
@@ -320,6 +328,7 @@ General max: 60 - 10 = 50 emails/min
 Standard RAG (Retrieve, Augment, Generate) retrieves relevant text chunks from a vector database and feeds them to an LLM as context. Generic implementations use tools like LangChain's `RecursiveCharacterTextSplitter` — which splits text every N characters.
 
 **Why generic chunking fails for financial documents:**
+
 - A bank statement row: `"2024-01-15 | Vendor Payment | -₹45,230"` split in half becomes meaningless
 - A bank policy: `"Minimum DSCR: 1.25. Exception: For MSMEs under CGTSME scheme, 1.10 is acceptable."` — if "Exception" lands in a different chunk, the LLM will wrongly reject eligible applicants
 
@@ -339,6 +348,7 @@ async def process_document(file_bytes, filename, mime_type) -> DocumentResult:
 ```
 
 **Native vs Scanned PDF detection:**
+
 ```python
 avg_chars_per_page = native_chars / result.page_count
 if avg_chars_per_page >= 50:
@@ -356,6 +366,7 @@ pdfplumber is synchronous and CPU-bound. Calling it directly in an async FastAPI
 **The ChunkingStrategyFactory** selects the right algorithm based on document type:
 
 **BankPolicySemanticStrategy (the most important one):**
+
 ```python
 # 0 token overlap — structural integrity guarantees we don't need it
 # Exception gluing — deterministically attaches caveats to parent rules
@@ -372,6 +383,7 @@ def _glue_exceptions(blocks):
 ```
 
 **FinancialTableStrategy (for bank statements):**
+
 ```python
 # group_table_rows detects tabular content and prevents mid-row splits
 def group_table_rows(lines):
@@ -394,11 +406,13 @@ await pgvector_service.store_chunks(chunks_with_embeddings)
 ```
 
 **HNSW Index** (Hierarchical Navigable Small World):
+
 ```sql
 CREATE INDEX idx_doc_emb_vector_hnsw ON document_embeddings
 USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 64);
 ```
+
 This gives approximate nearest-neighbor search in O(log n) instead of O(n) — critical for fast retrieval across millions of chunks.
 
 ### Pipeline Stage 4: Retrieval (`services/rag/retrieval_service.py`)
@@ -417,12 +431,14 @@ UNDERWRITING_QUESTIONS = {
 **Query Embedding Cache** — These 6 questions are embedded once and cached in `query_embedding_cache` PostgreSQL table. On every assessment, the system fetches cached vectors instead of calling the Gemini API 6 times.
 
 **Contiguous chunk merging:**
+
 ```python
 # If chunks 4, 5, 6 from the same page are retrieved separately,
 # merge them back together before sending to LLM
 if same_doc and same_page and curr_idx == prev_idx + 1:
     current_group.append(curr)
 ```
+
 This gives the LLM unbroken context instead of fragmented snippets.
 
 ### Pipeline Stage 5: CrossEncoder Re-Ranking
@@ -432,10 +448,10 @@ This gives the LLM unbroken context instead of fragmented snippets.
 async def rerank_chunks(self, query, chunks, top_k=3):
     # Prepare (query, chunk_text) pairs
     pairs = [[query, chunk["text"]] for chunk in chunks]
-    
+
     # Run CrossEncoder.predict() in thread pool (blocking CPU-bound operation)
     scores = await asyncio.to_thread(model.predict, pairs)
-    
+
     # Sort by ML relevance score
     reranked = sorted(chunks, key=lambda x: x["rerank_score"], reverse=True)
     return reranked[:top_k]
@@ -449,6 +465,7 @@ async def rerank_chunks(self, query, chunks, top_k=3):
 ### Pipeline Stage 6: LLM Synthesis
 
 Final context: merged, re-ranked chunks with provenance tags:
+
 ```
 [Evidence Source: ITR_2023.pdf | Type: itr]
 Annual Turnover (FY 2023): ₹2,40,00,000
@@ -491,6 +508,7 @@ We do use Redis Pub/Sub — but for the SSE fan-out layer, where fire-and-forget
 ### Q: "What happens if Redis goes down entirely?"
 
 **A:** Several things:
+
 1. `isTokenBlacklisted()` returns `true` — all tokens are treated as potentially blacklisted (fail-safe deny). Users cannot make API calls until Redis recovers. This is the correct security posture — availability is sacrificed to prevent revoked token reuse.
 2. `getSession()` returns `null` — the `protect` middleware throws 401 for all requests.
 3. SSE Pub/Sub stops working — notifications become REST-polling only (30s interval fallback in `NotificationContext`).

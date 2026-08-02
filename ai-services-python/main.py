@@ -61,10 +61,13 @@ async def lifespan(app: FastAPI):
 
     
     try:
+        from urllib.parse import urlparse
+        parsed = urlparse(settings.DATABASE_URL)
+        logger.info(f"Connecting to database at {parsed.hostname}:{parsed.port}")
         await init_db()
     except Exception as e:
         logger.critical(f"❌  PostgreSQL initialization failed: {e}")
-        raise
+        logger.warning("⚠️  Starting up anyway, but database-dependent features will fail.")
 
     
     llm_ok = await ping_llm()

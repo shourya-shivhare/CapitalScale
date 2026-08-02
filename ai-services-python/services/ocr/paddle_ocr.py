@@ -59,34 +59,35 @@ async def _ensure_pool():
     of CPU cores, e.g. 2-4). Falls back to 2 if the setting isn't present
     so this doesn't hard-crash on an unmigrated settings module.
     """
-    global _ocr_engines, _ocr_queue
-
-    if _ocr_queue:
-        return
-
-    async with _init_lock:
-        if _ocr_queue:
-            return
-
-        pool_size = getattr(settings, "OCR_POOL_SIZE", 2)
-        try:
-            _ocr_engines = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: [_create_engine() for _ in range(pool_size)]
-            )
-            _ocr_queue = asyncio.Queue()
-            for engine in _ocr_engines:
-                _ocr_queue.put_nowait(engine)
-
-            logger.info(
-                f"✅  PaddleOCR pool initialized (lang={settings.OCR_LANGUAGE}, "
-                f"gpu={settings.OCR_USE_GPU}, pool_size={pool_size})"
-            )
-        except ImportError:
-            logger.error("❌ PaddleOCR is not installed.")
-            raise
-        except Exception as e:
-            logger.error(f"❌ PaddleOCR pool initialization failed: {e}")
-            raise
+    # global _ocr_engines, _ocr_queue
+    # 
+    # if _ocr_queue:
+    #     return
+    # 
+    # async with _init_lock:
+    #     if _ocr_queue:
+    #         return
+    # 
+    #     pool_size = getattr(settings, "OCR_POOL_SIZE", 2)
+    #     try:
+    #         _ocr_engines = await asyncio.get_event_loop().run_in_executor(
+    #             None, lambda: [_create_engine() for _ in range(pool_size)]
+    #         )
+    #         _ocr_queue = asyncio.Queue()
+    #         for engine in _ocr_engines:
+    #             _ocr_queue.put_nowait(engine)
+    # 
+    #         logger.info(
+    #             f"✅  PaddleOCR pool initialized (lang={settings.OCR_LANGUAGE}, "
+    #             f"gpu={settings.OCR_USE_GPU}, pool_size={pool_size})"
+    #         )
+    #     except ImportError:
+    #         logger.error("❌ PaddleOCR is not installed.")
+    #         raise
+    #     except Exception as e:
+    #         logger.error(f"❌ PaddleOCR pool initialization failed: {e}")
+    #         raise
+    pass
 
 
 async def run_paddle_ocr_on_image(img_bytes: bytes) -> tuple[str, float]:
@@ -97,16 +98,20 @@ async def run_paddle_ocr_on_image(img_bytes: bytes) -> tuple[str, float]:
     Uses an asyncio.Queue to ensure each PaddleOCR engine is exclusively
     held by one task at a time, preventing concurrency crashes.
     """
-    await _ensure_pool()
-
-    engine = await _ocr_queue.get()
-    try:
-        return await asyncio.get_event_loop().run_in_executor(
-            None, _run_ocr_sync, engine, img_bytes
-        )
-    finally:
-        _ocr_queue.put_nowait(engine)
-        _ocr_queue.task_done()
+    # await _ensure_pool()
+    # 
+    # engine = await _ocr_queue.get()
+    # try:
+    #     return await asyncio.get_event_loop().run_in_executor(
+    #         None, _run_ocr_sync, engine, img_bytes
+    #     )
+    # finally:
+    #     _ocr_queue.put_nowait(engine)
+    #     _ocr_queue.task_done()
+    
+    # PaddleOCR disabled per user request
+    logger.info("PaddleOCR disabled. Returning empty string.")
+    return "", 0.0
 
 
 def _run_ocr_sync(engine, img_bytes: bytes) -> tuple[str, float]:
