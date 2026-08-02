@@ -47,10 +47,26 @@ export const smeRegister = asyncHandler(async (req, res) => {
 
 
 export const smeLogin = asyncHandler(async (req, res) => {
-  const result = await loginSME(req.body, req.ip);
+  const result = await loginSME(req.body, req.ip, req.headers['user-agent']);
+
+  setRefreshTokenCookie(res, result.refreshToken);
+
+  recordAuditLog({
+    actor_id: result.user.id,
+    actor_ref_model: 'SMEUser',
+    actor_email: result.user.email,
+    action: 'auth.login',
+    method: 'POST',
+    resource_path: req.originalUrl,
+    status: 'success',
+    status_code: 200,
+    ip_address: req.ip,
+    user_agent: req.headers['user-agent'],
+  }).catch(() => {});
+
   return ApiResponse.ok(
-    { mfaRequired: result.mfaRequired, tempToken: result.tempToken },
-    'Credentials verified. Please enter the OTP code sent to your email.'
+    { user: result.user, accessToken: result.accessToken },
+    'Login successful'
   ).send(res);
 });
 
@@ -83,10 +99,26 @@ export const bankAdminRegister = asyncHandler(async (req, res) => {
 
 
 export const bankAdminLogin = asyncHandler(async (req, res) => {
-  const result = await loginBankAdmin(req.body, req.ip);
+  const result = await loginBankAdmin(req.body, req.ip, req.headers['user-agent']);
+
+  setRefreshTokenCookie(res, result.refreshToken);
+
+  recordAuditLog({
+    actor_id: result.user.id,
+    actor_ref_model: 'BankAdminUser',
+    actor_email: result.user.email,
+    action: 'auth.login',
+    method: 'POST',
+    resource_path: req.originalUrl,
+    status: 'success',
+    status_code: 200,
+    ip_address: req.ip,
+    user_agent: req.headers['user-agent'],
+  }).catch(() => {});
+
   return ApiResponse.ok(
-    { mfaRequired: result.mfaRequired, tempToken: result.tempToken },
-    'Credentials verified. Please enter the OTP code sent to your email.'
+    { user: result.user, accessToken: result.accessToken },
+    'Login successful'
   ).send(res);
 });
 

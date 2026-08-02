@@ -256,7 +256,7 @@ export default function BankAdminRegisterPage() {
                   className={`w-full bg-white/5 border rounded-xl pl-10 pr-11 py-3 text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 transition-all ${errors.password ? 'border-red-500/50 focus:ring-red-500/30' : 'border-white/10 focus:ring-emerald-500/30 focus:border-emerald-500/50'}`}
                   {...register('password', {
                     required: 'Password is required',
-                    minLength: { value: 8, message: 'At least 8 characters' },
+                    minLength: { value: 12, message: 'At least 12 characters' },
                     validate: {
                       hasUpper: (v) => /[A-Z]/.test(v) || 'Needs uppercase letter',
                       hasNumber: (v) => /[0-9]/.test(v) || 'Needs a number',

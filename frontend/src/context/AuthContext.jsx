@@ -59,9 +59,6 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const { data } = await authApi.smeLogin(credentials);
-      if (data.data.mfaRequired) {
-        return { mfaRequired: true, tempToken: data.data.tempToken };
-      }
       setAuth({ user: data.data.user, accessToken: data.data.accessToken });
       return data.data.user;
     } finally {
@@ -89,9 +86,6 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const { data } = await authApi.bankLogin(credentials);
-      if (data.data.mfaRequired) {
-        return { mfaRequired: true, tempToken: data.data.tempToken };
-      }
       setAuth({ user: data.data.user, accessToken: data.data.accessToken });
       return data.data.user;
     } finally {

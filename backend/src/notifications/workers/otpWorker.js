@@ -45,7 +45,10 @@ export const startOTPWorker = async () => {
       const { correlationId, eventType, payload, retryCount = 0 } = messageData;
 
       try {
-        await trackEmailJob(messageData, 'processing');
+        // trackEmailJob is best-effort — don't let a missing table crash the worker
+        try { await trackEmailJob(messageData, 'processing'); } catch (trackErr) {
+          logger.warn(`[OTP Worker] email_jobs tracking skipped: ${trackErr.message}`);
+        }
 
         // Check rate limit (uses reserved OTP bucket)
         const { allowed, resetInMs } = await acquireEmailSlot('otp');
@@ -77,12 +80,13 @@ export const startOTPWorker = async () => {
         });
 
         // Success
-        await trackEmailJob(messageData, 'sent');
+        try { await trackEmailJob(messageData, 'sent'); } catch (_) {}
         _channel.ack(msg);
-        logger.info(`📧 [OTP Email Sent] To: ${payload.email} | Event: ${eventType} | ID: ${correlationId}`);
+        logger.info(`[OTP Email Sent] To: ${payload.email} | Event: ${eventType} | ID: ${correlationId}`);
 
       } catch (err) {
-        logger.error(`[OTP Worker] Processing failed for ${correlationId}: ${err.message}`);
+        logger.error(`[OTP Worker] FULL ERROR for ${correlationId}:`, err);
+        logger.error(`[OTP Worker] Stack: ${err.stack}`);
         
         messageData.retryCount = retryCount + 1;
         await trackEmailJob(messageData, 'failed', err.message);

@@ -109,7 +109,9 @@ export const updateLoanDraft = async (id, payload) => {
   const updates = {};
   const simple = ['amount', 'tenure', 'purpose', 'revenue', 'current_step', 'progress', 'status', 'risk_score'];
   for (const field of simple) {
-    if (payload[field] !== undefined) updates[field] = payload[field];
+    if (payload[field] !== undefined) {
+      updates[field] = payload[field] === '' ? null : payload[field];
+    }
   }
 
   const jsonb = ['business_info', 'financial_info', 'behavioural_questions'];

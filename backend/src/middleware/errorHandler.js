@@ -66,6 +66,7 @@ const errorHandler = (err, req, res, next) => {
     logger.error({
       message: error.message,
       stack: err.stack,
+      rawError: err,
       url: req.originalUrl,
       method: req.method,
       ip: req.ip,
@@ -76,6 +77,7 @@ const errorHandler = (err, req, res, next) => {
       url: req.originalUrl,
       method: req.method,
       statusCode: error.statusCode,
+      validationErrors: error.errors,
     });
   }
 

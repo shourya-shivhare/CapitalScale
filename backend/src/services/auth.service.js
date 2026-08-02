@@ -73,7 +73,7 @@ export const registerSME = async (data, _ipAddress, _userAgent) => {
   return { mfaRequired: true, tempToken, user: sanitizeUser(user, 'sme') };
 };
 
-export const loginSME = async ({ email, password }, ipAddress) => {
+export const loginSME = async ({ email, password }, ipAddress, userAgent) => {
   const attempts = await getFailedAttempts(email, ipAddress);
   if (attempts >= 5) { throw ApiError.tooManyRequests('Account locked due to too many failed attempts. Try again in 15 minutes.'); }
 
@@ -88,12 +88,16 @@ export const loginSME = async ({ email, password }, ipAddress) => {
   }
 
   await clearFailedAttempts(email, ipAddress);
+  await updateSMELastLogin(user.id);
 
-  await sendMfaOtp(user.id, email);
-  const tempToken = generateMfaToken({ id: user.id, email, role: 'sme' });
+  const payload = buildTokenPayload(user, 'sme');
+  const jti = uuidv4();
+  const accessToken  = generateAccessToken(payload, jti);
+  const refreshToken = generateRefreshToken({ id: user.id }, jti);
+  await setSession(jti, { userId: user.id, email: user.email, role: 'sme', ipAddress, userAgent, createdAt: new Date() });
 
-  logger.info(`SME login phase 1 passed: ${email}, MFA pending`);
-  return { mfaRequired: true, tempToken };
+  logger.info(`SME logged in: ${email}`);
+  return { user: sanitizeUser(user, 'sme'), accessToken, refreshToken };
 };
 
 
@@ -134,12 +138,16 @@ export const loginBankAdmin = async ({ email, password }, ipAddress) => {
   }
 
   await clearFailedAttempts(email, ipAddress);
+  await updateBankAdminLastLogin(user.id);
 
-  await sendMfaOtp(user.id, email);
-  const tempToken = generateMfaToken({ id: user.id, email, role: 'bank_admin' });
+  const payload = buildTokenPayload(user, 'bank_admin');
+  const jti = uuidv4();
+  const accessToken  = generateAccessToken(payload, jti);
+  const refreshToken = generateRefreshToken({ id: user.id }, jti);
+  await setSession(jti, { userId: user.id, email: user.email, role: 'bank_admin', ipAddress, userAgent, createdAt: new Date() });
 
-  logger.info(`Bank admin login phase 1 passed: ${email}, MFA pending`);
-  return { mfaRequired: true, tempToken };
+  logger.info(`Bank admin logged in: ${email}`);
+  return { user: sanitizeUser(user, 'bank_admin'), accessToken, refreshToken };
 };
 
 

@@ -257,7 +257,7 @@ Defined in [auth.validator.js](file:///e:/Desktop/Web%20Development/CapitalScale
 
 **Password Policy** (`strongPassword`):
 
-- Minimum 8 characters
+- Minimum 12 characters
 - At least 1 uppercase letter
 - At least 1 number
 - At least 1 special character
